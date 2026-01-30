@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+<meta name="theme-color" content="#3b82f6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LoopLive">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" id="manifest-placeholder">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%233b82f6'/%3E%3Ctext x='24' y='32' font-family='Arial' font-size='18' font-weight='bold' fill='white' text-anchor='middle'%3ELL%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%233b82f6'/%3E%3Ctext x='90' y='120' font-family='Arial' font-size='70' font-weight='bold' fill='white' text-anchor='middle'%3ELL%3C/text%3E%3C/svg%3E">
+<title>LoopLive - Timeline App</title>
+<script>
+// Inline manifest for PWA
+const manifestData = {
+  "name": "LoopLive - Timeline App",
+  "short_name": "LoopLive",
+  "description": "Circular timeline and Pomodoro app",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%233b82f6'/%3E%3Ctext x='96' y='130' font-family='Arial' font-size='90' font-weight='bold' fill='white' text-anchor='middle'%3ELL%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%233b82f6'/%3E%3Ctext x='256' y='350' font-family='Arial' font-size='240' font-weight='bold' fill='white' text-anchor='middle'%3ELL%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+};
+const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
+const manifestURL = URL.createObjectURL(manifestBlob);
+document.getElementById('manifest-placeholder').setAttribute('href', manifestURL);
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+* {
+-webkit-tap-highlight-color: transparent;
+-webkit-touch-callout: none;
+-webkit-user-select: none;
+user-select: none;
+}
+input, textarea {
+-webkit-user-select: text;
+user-select: text;
+}
+body {
+overscroll-behavior: none;
+margin: 0;
+padding: 0;
+font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#root {
+width: 100%;
+min-height: 100vh;
+overflow-x: hidden;
+}
+@keyframes pulse {
+0%, 100% { opacity: 1; }
+50% { opacity: 0.5; }
+}
+.animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+/* Menu overlay */
+.menu-overlay {
+position: fixed;
+top: 0;
+left: -100%;
+width: 80%;
+max-width: 320px;
+height: 100vh;
+background: white;
+box-shadow: 2px 0 12px rgba(0,0,0,0.1);
+transition: left 0.3s ease;
+z-index: 1000;
+overflow-y: auto;
+}
+.menu-overlay.open {
+left: 0;
+}
+.menu-backdrop {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100vh;
+background: rgba(0,0,0,0.5);
+opacity: 0;
+pointer-events: none;
+transition: opacity 0.3s ease;
+z-index: 999;
+}
+.menu-backdrop.open {
+opacity: 1;
+pointer-events: all;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+// Icons
+const MenuIcon = () => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>`;
+const PlayIcon = () => `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+const PauseIcon = () => `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>`;
+const ResetIcon = () => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 16v5h5"/></svg>`;
+const XIcon = () => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+const PlusIcon = () => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+const TrashIcon = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+
+// Default tasks
+const defaultTasks = [
+{ id: 1, name: 'Sleep', start: '00:00', end: '07:00', color: '#6366f1' },
+{ id: 2, name: 'Morning Routine', start: '07:00', end: '08:00', color: '#06b6d4' },
+{ id: 3, name: 'Work', start: '09:00', end: '12:00', color: '#3b82f6' },
+{ id: 4, name: 'Lunch Break', start: '12:00', end: '13:00', color: '#10b981' },
+{ id: 5, name: 'Work', start: '13:00', end: '17:00', color: '#3b82f6' },
+{ id: 6, name: 'Study', start: '18:00', end: '20:00', color: '#8b5cf6' },
+{ id: 7, name: 'Reading', start: '20:00', end: '21:30', color: '#f59e0b' },
+{ id: 8, name: 'Free Time', start: '21:30', end: '23:00', color: '#ec4899' }
+];
+
+const colors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#6366f1', '#06b6d4', '#ef4444'];
+
+// App State
+const state = {
+tasks: JSON.parse(localStorage.getItem('nowAppTasks')) || defaultTasks,
+currentTime: new Date(),
+menuOpen: false,
+showSettings: false,
+showAbout: false,
+// Focus timer (25 min)
+focusTimer: {
+isRunning: false,
+remainingSeconds: parseInt(localStorage.getItem('focusRemaining')) || 25 * 60,
+totalSeconds: 25 * 60,
+completedCycles: parseInt(localStorage.getItem('focusCycles')) || 0
+},
+// Break timer (5 min)
+breakTimer: {
+isRunning: false,
+remainingSeconds: parseInt(localStorage.getItem('breakRemaining')) || 5 * 60,
+totalSeconds: 5 * 60,
+completedCycles: parseInt(localStorage.getItem('breakCycles')) || 0
+},
+// Input stability
+isTyping: false,
+newTask: { name: '', start: '', end: '', color: '#3b82f6' }
+};
+
+// Save state
+const saveState = () => {
+localStorage.setItem('nowAppTasks', JSON.stringify(state.tasks));
+localStorage.setItem('focusRemaining', state.focusTimer.remainingSeconds.toString());
+localStorage.setItem('breakRemaining', state.breakTimer.remainingSeconds.toString());
+localStorage.setItem('focusCycles', state.focusTimer.completedCycles.toString());
+localStorage.setItem('breakCycles', state.breakTimer.completedCycles.toString());
+};
+
+// Utility functions
+const timeToMinutes = (time) => {
+const [hours, minutes] = time.split(':').map(Number);
+return hours * 60 + minutes;
+};
+
+const formatTime = (seconds) => {
+const h = Math.floor(seconds / 3600);
+const m = Math.floor((seconds % 3600) / 60);
+const s = seconds % 60;
+return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
+const formatTimerDisplay = (seconds) => {
+const m = Math.floor(seconds / 60);
+const s = seconds % 60;
+return `${m}:${s.toString().padStart(2, '0')}`;
+};
+
+const getCurrentTask = () => {
+const now = state.currentTime.getHours() * 60 + state.currentTime.getMinutes();
+return state.tasks.find(task => {
+const start = timeToMinutes(task.start);
+const end = timeToMinutes(task.end);
+return now >= start && now < end;
+});
+};
+
+const getTimeLeftInTask = (task) => {
+if (!task) return null;
+const now = state.currentTime;
+const currentMinutes = now.getHours() * 60 + now.getMinutes();
+const currentSeconds = now.getSeconds();
+const endMinutes = timeToMinutes(task.end);
+const totalSecondsLeft = (endMinutes - currentMinutes) * 60 - currentSeconds;
+return Math.max(0, totalSecondsLeft);
+};
+
+// Menu functions
+window.toggleMenu = () => {
+state.menuOpen = !state.menuOpen;
+render();
+};
+
+window.showSettingsTab = () => {
+state.showSettings = true;
+state.showAbout = false;
+render();
+};
+
+window.showAboutTab = () => {
+state.showAbout = true;
+state.showSettings = false;
+render();
+};
+
+window.hideSettings = () => {
+state.showSettings = false;
+state.showAbout = false;
+render();
+};
+
+// Timer functions
+window.toggleFocusTimer = () => {
+state.focusTimer.isRunning = !state.focusTimer.isRunning;
+if (state.focusTimer.isRunning && state.breakTimer.isRunning) {
+state.breakTimer.isRunning = false;
+}
+saveState();
+updateTimersOnly();
+};
+
+window.resetFocusTimer = () => {
+state.focusTimer.isRunning = false;
+state.focusTimer.remainingSeconds = state.focusTimer.totalSeconds;
+saveState();
+updateTimersOnly();
+};
+
+window.toggleBreakTimer = () => {
+state.breakTimer.isRunning = !state.breakTimer.isRunning;
+if (state.breakTimer.isRunning && state.focusTimer.isRunning) {
+state.focusTimer.isRunning = false;
+}
+saveState();
+updateTimersOnly();
+};
+
+window.resetBreakTimer = () => {
+state.breakTimer.isRunning = false;
+state.breakTimer.remainingSeconds = state.breakTimer.totalSeconds;
+saveState();
+updateTimersOnly();
+};
+
+// Task management
+window.handleInputFocus = () => {
+state.isTyping = true;
+};
+
+window.handleInputBlur = () => {
+setTimeout(() => {
+state.isTyping = false;
+}, 100);
+};
+
+window.updateTaskSilent = (id, field, value) => {
+const task = state.tasks.find(t => t.id === id);
+if (task) {
+task[field] = value;
+saveState();
+}
+};
+
+window.updateTask = (id, field, value) => {
+const task = state.tasks.find(t => t.id === id);
+if (task) {
+task[field] = value;
+saveState();
+updateCircleOnly();
+}
+};
+
+window.deleteTask = (id) => {
+state.tasks = state.tasks.filter(t => t.id !== id);
+saveState();
+render();
+};
+
+window.addTask = () => {
+if (state.newTask.name && state.newTask.start && state.newTask.end) {
+state.tasks.push({ ...state.newTask, id: Date.now() });
+state.tasks.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+state.newTask = { name: '', start: '', end: '', color: '#3b82f6' };
+saveState();
+render();
+}
+};
+
+// Render circular timeline
+const renderCircularTimeline = () => {
+const currentTask = getCurrentTask();
+const timeLeft = currentTask ? getTimeLeftInTask(currentTask) : 0;
+const currentMinutes = state.currentTime.getHours() * 60 + state.currentTime.getMinutes() + state.currentTime.getSeconds() / 60;
+const currentAngle = (currentMinutes / 1440) * 360;
+
+const centerX = 200;
+const centerY = 200;
+const radius = 160;
+
+let svg = `<svg width="400" height="400" viewBox="0 0 400 400" style="max-width: 100%; height: auto;">`;
+
+// Draw task arcs
+state.tasks.forEach(task => {
+const startMinutes = timeToMinutes(task.start);
+const endMinutes = timeToMinutes(task.end);
+const startAngle = (startMinutes / 1440) * 360 - 90;
+const endAngle = (endMinutes / 1440) * 360 - 90;
+
+const startRad = (startAngle * Math.PI) / 180;
+const endRad = (endAngle * Math.PI) / 180;
+
+const x1 = centerX + radius * Math.cos(startRad);
+const y1 = centerY + radius * Math.sin(startRad);
+const x2 = centerX + radius * Math.cos(endRad);
+const y2 = centerY + radius * Math.sin(endRad);
+
+const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+svg += `<path d="M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}" 
+stroke="${task.color}" stroke-width="12" fill="none" stroke-linecap="round"/>`;
+});
+
+// Draw hour markers and labels
+for (let hour = 0; hour < 24; hour++) {
+const angle = (hour / 24) * 360 - 90;
+const rad = (angle * Math.PI) / 180;
+const innerRadius = radius - 20;
+const outerRadius = radius + 5;
+const labelRadius = radius + 25;
+
+const x1 = centerX + innerRadius * Math.cos(rad);
+const y1 = centerY + innerRadius * Math.sin(rad);
+const x2 = centerX + outerRadius * Math.cos(rad);
+const y2 = centerY + outerRadius * Math.sin(rad);
+const labelX = centerX + labelRadius * Math.cos(rad);
+const labelY = centerY + labelRadius * Math.sin(rad);
+
+// Hour markers
+svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="2"/>`;
+
+// Hour labels
+svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" fill="#64748b" font-size="12" font-weight="600">${hour}</text>`;
+}
+
+// Draw minute markers (every 5 minutes)
+for (let min = 0; min < 1440; min += 5) {
+if (min % 60 !== 0) { // Skip hour positions
+const angle = (min / 1440) * 360 - 90;
+const rad = (angle * Math.PI) / 180;
+const innerRadius = radius - 10;
+const outerRadius = radius + 5;
+
+const x1 = centerX + innerRadius * Math.cos(rad);
+const y1 = centerY + innerRadius * Math.sin(rad);
+const x2 = centerX + outerRadius * Math.cos(rad);
+const y2 = centerY + outerRadius * Math.sin(rad);
+
+svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#cbd5e1" stroke-width="1"/>`;
+}
+}
+
+// Draw current time indicator (red dot)
+const currentRad = ((currentAngle - 90) * Math.PI) / 180;
+const dotX = centerX + radius * Math.cos(currentRad);
+const dotY = centerY + radius * Math.sin(currentRad);
+
+svg += `<circle cx="${dotX}" cy="${dotY}" r="8" fill="#ef4444" class="animate-pulse"/>`;
+svg += `<circle cx="${dotX}" cy="${dotY}" r="4" fill="#fff"/>`;
+
+// Center text
+if (currentTask) {
+svg += `<text x="${centerX}" y="${centerY - 30}" text-anchor="middle" fill="#1e293b" font-size="20" font-weight="bold">${currentTask.name}</text>`;
+svg += `<text x="${centerX}" y="${centerY}" text-anchor="middle" fill="${currentTask.color}" font-size="32" font-weight="bold">${formatTime(timeLeft)}</text>`;
+svg += `<text x="${centerX}" y="${centerY + 25}" text-anchor="middle" fill="#64748b" font-size="14">remaining time</text>`;
+} else {
+svg += `<text x="${centerX}" y="${centerY}" text-anchor="middle" fill="#64748b" font-size="18">No active task</text>`;
+}
+
+svg += `</svg>`;
+return svg;
+};
+
+// Update only circle
+const updateCircleOnly = () => {
+const container = document.getElementById('circle-container');
+if (container && !state.isTyping) {
+container.innerHTML = renderCircularTimeline();
+}
+};
+
+// Update only timers
+const updateTimersOnly = () => {
+const focusEl = document.getElementById('focus-timer-content');
+const breakEl = document.getElementById('break-timer-content');
+
+if (focusEl) {
+const progress = ((state.focusTimer.totalSeconds - state.focusTimer.remainingSeconds) / state.focusTimer.totalSeconds) * 100;
+focusEl.innerHTML = `
+<div class="text-center mb-3">
+<div class="text-3xl font-bold ${state.focusTimer.isRunning ? 'text-blue-600' : 'text-slate-700'}">
+${formatTimerDisplay(state.focusTimer.remainingSeconds)}
+</div>
+<div class="text-xs text-slate-500 mt-1">Cycles: ${state.focusTimer.completedCycles}</div>
+</div>
+<div class="w-full bg-slate-200 rounded-full h-1.5 mb-3">
+<div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: ${progress}%"></div>
+</div>
+<div class="flex gap-2">
+<button onclick="toggleFocusTimer()" class="flex-1 py-2 rounded-lg text-sm font-medium transition-all ${state.focusTimer.isRunning ? 'bg-slate-200 hover:bg-slate-300 text-slate-800' : 'bg-blue-500 hover:bg-blue-600 text-white'} flex items-center justify-center gap-1">
+${state.focusTimer.isRunning ? PauseIcon() : PlayIcon()}
+</button>
+<button onclick="resetFocusTimer()" class="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+${ResetIcon()}
+</button>
+</div>
+`;
+}
+
+if (breakEl) {
+const progress = ((state.breakTimer.totalSeconds - state.breakTimer.remainingSeconds) / state.breakTimer.totalSeconds) * 100;
+breakEl.innerHTML = `
+<div class="text-center mb-3">
+<div class="text-3xl font-bold ${state.breakTimer.isRunning ? 'text-green-600' : 'text-slate-700'}">
+${formatTimerDisplay(state.breakTimer.remainingSeconds)}
+</div>
+<div class="text-xs text-slate-500 mt-1">Cycles: ${state.breakTimer.completedCycles}</div>
+</div>
+<div class="w-full bg-slate-200 rounded-full h-1.5 mb-3">
+<div class="bg-green-500 h-1.5 rounded-full transition-all" style="width: ${progress}%"></div>
+</div>
+<div class="flex gap-2">
+<button onclick="toggleBreakTimer()" class="flex-1 py-2 rounded-lg text-sm font-medium transition-all ${state.breakTimer.isRunning ? 'bg-slate-200 hover:bg-slate-300 text-slate-800' : 'bg-green-500 hover:bg-green-600 text-white'} flex items-center justify-center gap-1">
+${state.breakTimer.isRunning ? PauseIcon() : PlayIcon()}
+</button>
+<button onclick="resetBreakTimer()" class="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+${ResetIcon()}
+</button>
+</div>
+`;
+}
+};
+
+// Main render
+const render = () => {
+const root = document.getElementById('root');
+const currentDate = state.currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+root.innerHTML = `
+<!-- Menu Backdrop -->
+<div class="menu-backdrop ${state.menuOpen ? 'open' : ''}" onclick="toggleMenu()"></div>
+
+<!-- Sidebar Menu -->
+<div class="menu-overlay ${state.menuOpen ? 'open' : ''}">
+<div class="p-6">
+<div class="flex items-center justify-between mb-6">
+<h2 class="text-xl font-bold text-slate-800">Menu</h2>
+<button onclick="toggleMenu()" class="text-slate-600 hover:text-slate-800">
+${XIcon()}
+</button>
+</div>
+
+<nav class="space-y-2">
+<button onclick="hideSettings(); toggleMenu();" class="w-full text-left px-4 py-3 rounded-lg ${!state.showSettings && !state.showAbout ? 'bg-blue-50 text-blue-600' : 'text-slate-700 hover:bg-slate-50'}">
+Dashboard
+</button>
+<button onclick="showSettingsTab(); toggleMenu();" class="w-full text-left px-4 py-3 rounded-lg ${state.showSettings ? 'bg-blue-50 text-blue-600' : 'text-slate-700 hover:bg-slate-50'}">
+Settings
+</button>
+<button onclick="showAboutTab(); toggleMenu();" class="w-full text-left px-4 py-3 rounded-lg ${state.showAbout ? 'bg-blue-50 text-blue-600' : 'text-slate-700 hover:bg-slate-50'}">
+About
+</button>
+</nav>
+</div>
+</div>
+
+<!-- Main Content -->
+<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+<div class="max-w-6xl mx-auto p-4 md:p-8">
+<!-- Header -->
+<div class="flex items-center justify-between mb-4">
+<button onclick="toggleMenu()" class="p-2 hover:bg-white rounded-lg transition-colors">
+${MenuIcon()}
+</button>
+<div class="flex-1 text-center">
+<h1 class="text-3xl md:text-4xl font-bold text-slate-800">LoopLive</h1>
+</div>
+<div class="w-10"></div>
+</div>
+
+<div class="text-center mb-6">
+<p class="text-slate-600 text-sm">${currentDate}</p>
+</div>
+
+${!state.showSettings && !state.showAbout ? `
+<!-- Dashboard View -->
+<!-- Circular Timeline -->
+<div class="flex justify-center mb-8">
+<div id="circle-container" class="bg-white rounded-3xl shadow-lg p-8">
+${renderCircularTimeline()}
+</div>
+</div>
+
+<!-- Pomodoro Timers -->
+<div class="grid grid-cols-2 gap-4 max-w-md mx-auto">
+<!-- Focus Timer -->
+<div class="bg-white rounded-2xl shadow-lg p-4">
+<h3 class="text-sm font-semibold text-slate-800 mb-3 text-center flex items-center justify-center gap-2">
+<span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+Focus (25min)
+</h3>
+<div id="focus-timer-content">
+${(() => {
+const progress = ((state.focusTimer.totalSeconds - state.focusTimer.remainingSeconds) / state.focusTimer.totalSeconds) * 100;
+return `
+<div class="text-center mb-3">
+<div class="text-3xl font-bold ${state.focusTimer.isRunning ? 'text-blue-600' : 'text-slate-700'}">
+${formatTimerDisplay(state.focusTimer.remainingSeconds)}
+</div>
+<div class="text-xs text-slate-500 mt-1">Cycles: ${state.focusTimer.completedCycles}</div>
+</div>
+<div class="w-full bg-slate-200 rounded-full h-1.5 mb-3">
+<div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: ${progress}%"></div>
+</div>
+<div class="flex gap-2">
+<button onclick="toggleFocusTimer()" class="flex-1 py-2 rounded-lg text-sm font-medium transition-all ${state.focusTimer.isRunning ? 'bg-slate-200 hover:bg-slate-300 text-slate-800' : 'bg-blue-500 hover:bg-blue-600 text-white'} flex items-center justify-center gap-1">
+${state.focusTimer.isRunning ? PauseIcon() : PlayIcon()}
+</button>
+<button onclick="resetFocusTimer()" class="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+${ResetIcon()}
+</button>
+</div>
+`;
+})()}
+</div>
+</div>
+
+<!-- Break Timer -->
+<div class="bg-white rounded-2xl shadow-lg p-4">
+<h3 class="text-sm font-semibold text-slate-800 mb-3 text-center flex items-center justify-center gap-2">
+<span class="w-2 h-2 bg-green-500 rounded-full"></span>
+Break (5min)
+</h3>
+<div id="break-timer-content">
+${(() => {
+const progress = ((state.breakTimer.totalSeconds - state.breakTimer.remainingSeconds) / state.breakTimer.totalSeconds) * 100;
+return `
+<div class="text-center mb-3">
+<div class="text-3xl font-bold ${state.breakTimer.isRunning ? 'text-green-600' : 'text-slate-700'}">
+${formatTimerDisplay(state.breakTimer.remainingSeconds)}
+</div>
+<div class="text-xs text-slate-500 mt-1">Cycles: ${state.breakTimer.completedCycles}</div>
+</div>
+<div class="w-full bg-slate-200 rounded-full h-1.5 mb-3">
+<div class="bg-green-500 h-1.5 rounded-full transition-all" style="width: ${progress}%"></div>
+</div>
+<div class="flex gap-2">
+<button onclick="toggleBreakTimer()" class="flex-1 py-2 rounded-lg text-sm font-medium transition-all ${state.breakTimer.isRunning ? 'bg-slate-200 hover:bg-slate-300 text-slate-800' : 'bg-green-500 hover:bg-green-600 text-white'} flex items-center justify-center gap-1">
+${state.breakTimer.isRunning ? PauseIcon() : PlayIcon()}
+</button>
+<button onclick="resetBreakTimer()" class="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+${ResetIcon()}
+</button>
+</div>
+`;
+})()}
+</div>
+</div>
+</div>
+` : state.showAbout ? `
+<!-- About View -->
+<div class="max-w-2xl mx-auto">
+<div class="bg-white rounded-2xl shadow-lg p-8">
+<div class="text-center mb-8">
+<div class="inline-flex items-center justify-center w-20 h-20 bg-blue-500 rounded-full mb-4">
+<span class="text-white text-3xl font-bold">LL</span>
+</div>
+<h2 class="text-3xl font-bold text-slate-800 mb-2">LoopLive</h2>
+<p class="text-slate-600">Circular Timeline & Pomodoro App</p>
+</div>
+
+<div class="space-y-6">
+<div>
+<h3 class="text-lg font-semibold text-slate-800 mb-3">About</h3>
+<p class="text-slate-600 leading-relaxed">
+LoopLive is a productivity app that visualizes your daily schedule as a beautiful circular timeline. 
+Track your tasks throughout the 24-hour cycle and stay focused with built-in Pomodoro timers.
+</p>
+</div>
+
+<div class="border-t border-slate-200 pt-6">
+<h3 class="text-lg font-semibold text-slate-800 mb-3">Features</h3>
+<ul class="space-y-2 text-slate-600">
+<li class="flex items-start">
+<span class="text-blue-500 mr-2">•</span>
+<span>Circular 24-hour timeline with live time tracking</span>
+</li>
+<li class="flex items-start">
+<span class="text-blue-500 mr-2">•</span>
+<span>Visual task management with custom colors</span>
+</li>
+<li class="flex items-start">
+<span class="text-blue-500 mr-2">•</span>
+<span>Focus timer (25 min) and Break timer (5 min)</span>
+</li>
+<li class="flex items-start">
+<span class="text-blue-500 mr-2">•</span>
+<span>Real-time countdown with remaining time display</span>
+</li>
+<li class="flex items-start">
+<span class="text-blue-500 mr-2">•</span>
+<span>Progressive Web App (PWA) - Install on your device</span>
+</li>
+</ul>
+</div>
+
+<div class="border-t border-slate-200 pt-6">
+<h3 class="text-lg font-semibold text-slate-800 mb-3">Author</h3>
+<div class="flex items-center gap-3">
+<div class="flex-1">
+<p class="text-slate-600">
+<a href="mailto:dyndec14@gmail.com" class="text-blue-500 hover:text-blue-600 font-medium">
+dyndec14@gmail.com
+</a>
+</p>
+</div>
+</div>
+</div>
+
+<div class="border-t border-slate-200 pt-6">
+<h3 class="text-lg font-semibold text-slate-800 mb-3">Version</h3>
+<p class="text-slate-600">1.0.0</p>
+</div>
+</div>
+</div>
+</div>
+` : `
+<!-- Settings View -->
+<div class="max-w-2xl mx-auto">
+<div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+<h2 class="text-2xl font-bold text-slate-800 mb-6">Task Schedule</h2>
+
+<!-- Task List -->
+<div class="space-y-4 mb-6">
+${state.tasks.map(task => `
+<div class="border border-slate-200 rounded-xl p-4" style="border-left: 4px solid ${task.color}">
+<div class="flex items-start gap-3">
+<div class="flex-1">
+<input type="text" 
+id="task-name-${task.id}"
+value="${task.name}"
+onfocus="handleInputFocus()"
+onblur="handleInputBlur()"
+oninput="updateTaskSilent(${task.id}, 'name', this.value)"
+class="text-lg font-semibold text-slate-800 bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-blue-500 focus:outline-none w-full mb-2">
+
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="block text-xs text-slate-500 mb-1">Start</label>
+<input type="time" 
+id="task-start-${task.id}"
+value="${task.start}"
+onfocus="handleInputFocus()"
+onblur="handleInputBlur()"
+onchange="updateTask(${task.id}, 'start', this.value)"
+class="w-full text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+</div>
+<div>
+<label class="block text-xs text-slate-500 mb-1">End</label>
+<input type="time" 
+id="task-end-${task.id}"
+value="${task.end}"
+onfocus="handleInputFocus()"
+onblur="handleInputBlur()"
+onchange="updateTask(${task.id}, 'end', this.value)"
+class="w-full text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+</div>
+</div>
+
+<div class="flex gap-1.5 mt-3">
+${colors.map(color => `
+<button onclick="updateTask(${task.id}, 'color', '${color}')"
+class="w-6 h-6 rounded-md transition-all ${task.color === color ? 'ring-2 ring-slate-800 ring-offset-2 scale-110' : 'hover:scale-105'}"
+style="background-color: ${color}"></button>
+`).join('')}
+</div>
+</div>
+
+<button onclick="deleteTask(${task.id})" class="text-slate-400 hover:text-red-500 transition-colors">
+${TrashIcon()}
+</button>
+</div>
+</div>
+`).join('')}
+</div>
+
+<!-- Add Task Form -->
+<div class="border-2 border-dashed border-slate-300 rounded-xl p-4">
+<h3 class="text-lg font-semibold text-slate-800 mb-4">Add New Task</h3>
+<div class="space-y-3">
+<input type="text" 
+value="${state.newTask.name}"
+onfocus="handleInputFocus()"
+onblur="handleInputBlur()"
+oninput="state.newTask.name = this.value"
+placeholder="Task name"
+class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+
+<div class="grid grid-cols-2 gap-3">
+<input type="time" 
+value="${state.newTask.start}"
+onfocus="handleInputFocus()"
+onblur="handleInputBlur()"
+onchange="state.newTask.start = this.value"
+class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+<input type="time" 
+value="${state.newTask.end}"
+onfocus="handleInputFocus()"
+onblur="handleInputBlur()"
+onchange="state.newTask.end = this.value"
+class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+</div>
+
+<div class="flex gap-2">
+${colors.map(color => `
+<button onclick="state.newTask.color = '${color}'; render();"
+class="w-8 h-8 rounded-lg ${state.newTask.color === color ? 'ring-2 ring-slate-800 ring-offset-2' : ''}"
+style="background-color: ${color}"></button>
+`).join('')}
+</div>
+
+<button onclick="addTask()" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+${PlusIcon()}
+<span>Add Task</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+`}
+</div>
+</div>
+`;
+};
+
+// Initialize
+render();
+
+// Timer tick (every second)
+setInterval(() => {
+state.currentTime = new Date();
+
+// Update focus timer
+if (state.focusTimer.isRunning) {
+state.focusTimer.remainingSeconds--;
+if (state.focusTimer.remainingSeconds <= 0) {
+state.focusTimer.remainingSeconds = 0;
+state.focusTimer.isRunning = false;
+state.focusTimer.completedCycles++;
+setTimeout(() => {
+state.focusTimer.remainingSeconds = state.focusTimer.totalSeconds;
+saveState();
+updateTimersOnly();
+}, 1000);
+}
+saveState();
+}
+
+// Update break timer
+if (state.breakTimer.isRunning) {
+state.breakTimer.remainingSeconds--;
+if (state.breakTimer.remainingSeconds <= 0) {
+state.breakTimer.remainingSeconds = 0;
+state.breakTimer.isRunning = false;
+state.breakTimer.completedCycles++;
+setTimeout(() => {
+state.breakTimer.remainingSeconds = state.breakTimer.totalSeconds;
+saveState();
+updateTimersOnly();
+}, 1000);
+}
+saveState();
+}
+
+// Update displays
+if (!state.isTyping && !state.menuOpen) {
+updateCircleOnly();
+updateTimersOnly();
+}
+}, 1000);
+</script>
+</body>
+</html>
